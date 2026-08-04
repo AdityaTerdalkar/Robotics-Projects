@@ -1,0 +1,432 @@
+#include <PID_v1.h>
+#include<ezButton.h>
+
+volatile long tempFront = 0, counterFront = 0;
+volatile long tempLeft  = 0, counterLeft = 0;
+volatile long tempRight = 0, counterRight = 0;
+
+volatile long oldFrontPos = 0, currentFrontPos = 0; //This variable will increase or decrease depending on the rotation of encoder
+volatile long oldLeftPos  = 0, currentLeftPos = 0;
+volatile long oldRightPos = 0, currentRightPos = 0;
+
+const double cm_per_tick = 2.0 * PI * 3.0 / 1200.0;       //
+volatile double x = 0.0, y = 0.0, h = 0.0;  // encoder output
+
+
+///////////////////////////////////////////////////////////
+//////////////////////// DRIVE STUFF //////////////////////
+
+int s1 = 44;    //f and s pins are pwm
+int ds1 = 38;
+
+int s2 = 46;
+int ds2 = 40;     //TX2
+
+int f1 = 4;      //RX2
+int df1 = 22;
+
+int f2 = 5;
+int df2 = 24;
+
+int mechdir = 28;     // dir
+int mechpwm = 7;  //pwm     +a   m4
+
+int soldir = 26 ;
+int solpwm = 6;   // piston pwm
+const int maxspeed = 30 ;             ////////////// speed variable
+const int minspeed = 0 ;
+
+//========================    =   pid  =       ===========================
+
+const double targetx = 100;           
+const double targety = 100;
+const double targeth = 0;
+
+const double rad = 25.5;                   // measure
+
+double controlx;
+double controly;
+double controlh;
+
+//=====================t u n i n g   p a r t ----------------------------------------------------------------
+
+double xKp = 2, xKi = 5, xKd = 1;
+double yKp = 2, yKi = 5, yKd = 1;
+double hKp = 2, hKi = 5, hKd = 1;
+const double LENGTH = 13.5;
+const double bLENGTH = 15.5;
+
+//=====================pid
+PID xpid (&x, &controlx, &targetx, xKp, xKi, xKd, DIRECT);
+PID ypid (&y, &controly, &targety, yKp, yKi, yKd, DIRECT);
+PID hpid (&h, &controlh, &targeth, hKp, hKi, hKd, DIRECT);
+
+
+//============================others===================================
+
+
+volatile double dt = 0 ;
+volatile double prev  = 0 ;         ///// time
+volatile double curr  ;
+volatile double mprev  = 0 ;         ///// time
+volatile double mcurr  ;
+
+void xymotor(double controlx1 = 0.0 , double controly1 = 0.0, double controlh12 = 0.0);
+//====================LIMIT SWITCH ======================================
+
+ezButton mechlimitup (A0);
+ezButton mechlimitdown (A14);
+
+bool mechflagup = 0  ;
+bool mechflagdown = 0  ;
+
+///////////////////////////////////////////////////////////
+///////////////////////////////////////////////////////////
+void setup()
+{
+  Serial.begin(9600);
+  pinMode(2, INPUT_PULLUP);
+  pinMode(3, INPUT_PULLUP);
+  attachInterrupt(0, ai0Front, RISING);
+  attachInterrupt(1, ai1Front, RISING);
+
+
+  pinMode(18, INPUT_PULLUP);
+  pinMode(19, INPUT_PULLUP);
+  attachInterrupt(5, ai0Left, RISING);
+  attachInterrupt(4, ai1Left, RISING);
+
+  pinMode(20, INPUT_PULLUP);
+  pinMode(21, INPUT_PULLUP);
+  attachInterrupt(3, ai0Right, RISING);
+  attachInterrupt(2, ai1Right, RISING);  // 50
+
+ 
+  ////////////////////////// DRIV STUFF /////////////////////////
+  ////////////////////// MOTOR DRIVE PINS //////////////////
+
+  pinMode(f1, OUTPUT);
+  pinMode(df1, OUTPUT);
+  pinMode(f2, OUTPUT);
+  pinMode(df2, OUTPUT);
+  pinMode(s1, OUTPUT);
+  pinMode(s2, OUTPUT);
+  pinMode(ds1, OUTPUT);
+  pinMode(ds2, OUTPUT);
+  pinMode(mechdir, OUTPUT);
+  pinMode(mechpwm, OUTPUT);
+  pinMode(soldir, OUTPUT);
+  pinMode(solpwm, OUTPUT);
+  //////////////////////////// DRIVE DISABLE /////////////
+
+  //turn the PID on
+  xpid.SetMode(AUTOMATIC);
+  ypid.SetMode(AUTOMATIC);
+  hpid.SetMode(AUTOMATIC);
+  //================================limit
+
+  mechlimitup.setDebounceTime (50);
+  mechlimitdown.setDebounceTime (50);
+
+
+  Serial.println("=======================START ==================");
+  Stop(); Stopmech ;
+  delay(2000);
+
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////
+////////////////////////////////////// ----- MAIN LOOP ----- ///////////////////////////////////////
+////////////////////////////////////////////////////////////////////////////////////////////////////
+
+void loop()
+{Serial.println("-");
+
+  odometry();
+  xpid.Compute(); ypid.Compute(); hpid.Compute();
+  xymotor(controlx, controly, controlh);
+
+
+}
+// ===========================odometry========================
+
+void odometry() {
+
+  oldLeftPos = currentLeftPos;
+  oldRightPos = currentRightPos;
+  oldFrontPos = currentFrontPos;
+
+  currentLeftPos  = counterLeft;
+  currentRightPos = counterRight;
+  currentFrontPos = counterFront;
+
+  int dn1 = currentLeftPos  - oldLeftPos;
+  int dn2 = currentRightPos - oldRightPos;
+  int dn3 = currentFrontPos - oldFrontPos;
+
+  // the robot has moved and turned a tiny bit between two measurements:
+  double dtheta = cm_per_tick * ((dn1 - dn2) / (LENGTH));
+  double dy = cm_per_tick * ((dn1 + dn2) / 2.0);
+  double dx = cm_per_tick * (dn3 + ((dn2 - dn1) * bLENGTH / LENGTH));
+ 
+
+
+  double theta = h + (dtheta / 2.0);
+  x += dx * cos(theta) - dy * sin(theta);
+  y += dx * sin(theta) + dy * cos(theta);
+  h += dtheta;
+
+  Serial.print("x : "); Serial.print(x);
+  Serial.print("\ty : "); Serial.print(y);
+  Serial.print("\th : "); Serial.print(h * 57.2957795);
+}
+
+void xymotor(double controlx1 = 0.0 , double controly1 = 0.0, double controlh12 = 0.0)
+{
+  int motorspeedx = abs(controlx1);
+  int motorspeedy = abs(controly1);
+  int controlh1 = abs(controlh12);
+
+  if ((motorspeedy > 10 ) || (motorspeedy > 10) || (controlh1 > 10) ) {
+    if (controlx1 > 0) {
+      Serial.print("\tright  " + String(controlx1));
+      digitalWrite(ds1, 0);
+      digitalWrite(ds2, 1);
+      analogWrite(s1, constrain(controlx1, minspeed, maxspeed));
+      analogWrite(s2, constrain(controlx1 , minspeed, maxspeed));
+
+    }
+    else if (controlx1 < 0) {
+      Serial.print("\tleft  " + String(controlx1));
+      digitalWrite(ds1, 1);
+      digitalWrite(ds2, 0);
+      analogWrite(s1, constrain(controlx1, minspeed, maxspeed));
+      analogWrite(s2, constrain(controlx1 , minspeed, maxspeed));
+    }
+    else {//==========================================
+      Stopx();
+      if (controly1 > 0) {
+        Serial.print("\tforw  " + String(controly1) );
+        digitalWrite(df1, 1);
+        digitalWrite(df2, 0);
+        analogWrite(f1, constrain( controly1, minspeed, maxspeed));
+        analogWrite(f2, constrain( controly1, minspeed, maxspeed));
+      }
+      else if (controly1 < 0) {
+        Serial.print("\trev  " + String(controly1));
+        digitalWrite(df1, 0);
+        digitalWrite(df2, 1);
+        analogWrite(f1, constrain( controly1, minspeed, maxspeed));
+        analogWrite(f2, constrain( controly1, minspeed, maxspeed));
+      }
+      else {
+        Stop();
+
+        if (controlh1 > 0) {//=========================================
+          controly1 = constrain( controly1, minspeed, maxspeed);
+          c(controly1);
+        }
+        else if (controlh1 < 0) {   //=========================================
+          controly1 = constrain( controly1, minspeed, maxspeed);
+          a(controly1);
+        }
+        else {
+          Stop(); // gripper and limit
+          Stopmech();
+        }
+      }
+    }
+  }
+
+else {
+  Stop(); Stopmech();
+     }
+}
+
+
+//===========================drive funciton ======================
+void forw(int f) {
+  Serial.print("\tforw  " + String(f) );
+  analogWrite(f1, f);
+  analogWrite(f2, f);
+  digitalWrite(df1, 1);
+  digitalWrite(df2, 0);
+}
+
+void rev(int r) {
+  Serial.print("\trev  " + String(r));
+  analogWrite(f1, r);
+  analogWrite(f2, r);
+  digitalWrite(df1, 0);
+  digitalWrite(df2, 1);
+}
+
+void left(int l) {
+  Serial.print("\tleft  " + String(l));
+  analogWrite(s1, l);
+  analogWrite(s2, l);
+  digitalWrite(ds1, 1);
+  digitalWrite(ds2, 0);
+}
+
+void right(int rl) {
+  Serial.print("\tright  " + String(rl));
+  analogWrite(s1, rl);
+  analogWrite(s2, rl);
+  digitalWrite(ds1, 0);
+  digitalWrite(ds2, 1);
+}
+
+void Stop() {
+  Serial.print("\tstopxy  " + String( 0 ));
+  analogWrite(f1, 0);
+  analogWrite(f2, 0);
+  analogWrite(s1, 0);
+  analogWrite(s2, 0);
+
+}
+
+void Stopx() {
+  Serial.print("\tstopx  " + String( 0 ));
+
+  analogWrite(s1, 0);
+  analogWrite(s2, 0);
+
+}
+void Stopy() {
+  Serial.print("\tstopy  " + String( 0 ));
+  analogWrite(f1, 0);
+  analogWrite(f2, 0);
+
+}
+void c(int c) {
+  Stopx();
+  Serial.print("\tclockwise  " + String(c) );
+  analogWrite(f1, c);
+  analogWrite(f2, c);
+  digitalWrite(df1, 0);
+  digitalWrite(df2, 0);
+}
+void a(int a) {
+  Stopx();
+  Serial.print("\tanticlockwise " + String(a) );
+  analogWrite(f1, a);
+  analogWrite(f2, a);
+  digitalWrite(df1, 1);
+  digitalWrite(df2, 1);
+}
+
+void disp(char z) {
+  
+  if (1) {
+    char command = z ;
+    if (command == 'F') forw (50);
+    if (command == 'B') rev(50);
+    if (command == 'R') right(50);
+    if (command == 'L') left(50);
+    if (command == 'C') c(50);
+    if (command == 'A') a(50);
+    if (command == 'S')  Stop();
+    if (command == 'Y') Stopy();
+    if (command == 'X') Stopx();
+
+    if (command == 'O') {
+      digitalWrite(soldir, 1);
+      digitalWrite(solpwm, 1);
+    }
+    else if (command == '1')  {
+      digitalWrite(soldir, 0);
+      digitalWrite(solpwm, 0);
+    }
+    if ((command == 'U') &&  (mechlimitup.isPressed())) {
+
+      Serial.print("up");
+      digitalWrite(mechdir, 0);   //dir
+      analogWrite(mechpwm, 100);
+    }
+
+    else if  (((command == 'D') && (mechlimitdown.isPressed()))) {
+
+      Serial.print("down");
+      digitalWrite(mechdir, 1);     //dir
+      analogWrite(mechpwm, 100);
+    }
+
+  }
+}
+//=========ENCODER FUNCTIONS======
+void ai0Front() {
+  if (digitalRead(3) == LOW) {
+    counterFront--;
+  } else {
+    counterFront++;
+  }
+}
+void ai1Front() {
+  if (digitalRead(2) == LOW) {
+    counterFront++;
+  } else {
+    counterFront--;
+  }
+}
+
+
+void ai0Left() {
+  if (digitalRead(19) == LOW) {
+    counterLeft++;
+  } else {
+    counterLeft--;
+  }
+}
+void ai1Left() {
+  if (digitalRead(18) == LOW) {
+    counterLeft--;
+  } else {
+    counterLeft++;
+  }
+}
+
+
+void ai0Right() {
+  if (digitalRead(21) == LOW) {
+    counterRight--;
+  } else {
+    counterRight++;
+  }
+}
+void ai1Right() {
+  if (digitalRead(20) == LOW) {
+    counterRight++;
+  } else {
+    counterRight--;
+  }
+}
+
+long getFrontEncoderCount()
+{
+  if ( counterFront != tempFront )
+  {
+    tempFront = counterFront;
+    Serial.print("\tFront: "); Serial.print(counterFront);
+  }
+  return counterFront;
+}
+long getLeftEncoderCount()
+{
+  if ( counterLeft != tempLeft )
+  {
+    tempLeft = counterLeft;
+    Serial.print("\tLeft: "); Serial.print(counterLeft);
+  }
+  return counterLeft;
+}
+long getRightEncoderCount()
+{
+  if ( counterRight != tempRight )
+  {
+    tempRight = counterRight;
+    Serial.print("\tRight: "); Serial.print(counterRight);
+  }
+  return counterRight;
+}
