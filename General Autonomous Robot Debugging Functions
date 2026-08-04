@@ -1,0 +1,366 @@
+
+//////////////// Encoder Variables /////////////////////
+volatile long tempBack = 0, counterBack   = 0;
+volatile long tempLeft  = 0, counterLeft  = 0;
+volatile long tempRight = 0, counterRight = 0;
+
+volatile double botY = 0.0;
+volatile double botX = 0.0;
+
+const double cm_per_tick = 2.0 * PI * 3 / 1200;
+////////////////////////////////////////////////////////
+
+////////////////////////////////////////////////////////////////////
+///////////////////////// DEFINING MOTOR DRIVER PINS////////////////
+// Defining Motor DIR Pins
+#define M1_DIR  38
+#define M2_DIR  22
+#define M3_DIR  40
+#define M4_DIR  24
+
+//Defining Motor PWM Pins
+#define M1_PWM  44
+#define M2_PWM  4
+#define M3_PWM  46
+#define M4_PWM  5
+
+//Defining Grip Vertical Pins
+#define GripVertical_DIR  28
+#define GripVertical_PWM  7
+
+//Defining Grip Piston Pins
+#define GripPiston_DIR    26
+#define GripPiston_PWM    6
+
+//Defining Limit Switch Pins
+#define FrontLeft_LIMIT   A0
+#define FrontRight_LIMIT  A1
+
+#define LeftFront_LIMIT   A7
+#define LeftBack_LIMIT    A6
+
+#define RightFront_LIMIT  A2
+#define RightBack_LIMIT   A3
+
+#define ClampBottom_LIMIT A10
+#define ClampTop_LIMIT    A8
+
+boolean FIX_LeftBack_LIMIT  = 0;
+boolean FIX_RightFront_LIMIT    = 0;
+boolean FIX_RightBack_LIMIT     = 0;
+
+////////////////////////////////////////////////////////////////////
+////////////////////////////////////////////////////////////////////
+
+//===========================================================================>
+//===========================================================================>
+
+////////////////////////////////////////////////////////////////////
+////////////////////// Initialize Methods///////////////////////////
+
+// Initialize Motor Pins
+void INIT_MotorPins()
+{
+  pinMode(M1_DIR, OUTPUT);
+  pinMode(M2_DIR, OUTPUT);
+  pinMode(M3_DIR, OUTPUT);
+  pinMode(M4_DIR, OUTPUT);
+  
+  pinMode(M1_PWM, OUTPUT);
+  pinMode(M1_PWM, OUTPUT);
+  pinMode(M1_PWM, OUTPUT);
+  pinMode(M1_PWM, OUTPUT);
+
+
+  pinMode(GripVertical_DIR, OUTPUT);
+  pinMode(GripVertical_PWM, OUTPUT);
+
+  pinMode(GripPiston_DIR, OUTPUT);
+  pinMode(GripPiston_PWM, OUTPUT);
+}
+
+void INIT_LimitSwitchPins()
+{
+  pinMode(FrontLeft_LIMIT,INPUT_PULLUP);
+  pinMode(FrontRight_LIMIT,INPUT_PULLUP);
+
+  pinMode(LeftFront_LIMIT,INPUT_PULLUP);
+  pinMode(LeftBack_LIMIT,INPUT_PULLUP);
+
+  pinMode(RightFront_LIMIT,INPUT_PULLUP);
+  pinMode(RightBack_LIMIT,INPUT_PULLUP);
+
+  pinMode(ClampBottom_LIMIT,INPUT_PULLUP);
+  pinMode(ClampTop_LIMIT,INPUT_PULLUP);
+}
+////////////////////////////////////////////////////////////////////
+////////////////////////////////////////////////////////////////////
+
+////////////////////////////////////////////////////////////////////
+///////////////////////// ENCODER FUNCTIONS ////////////////////////
+
+// Initialize Motor PWM to 0
+void INIT_MotorPins_Stop()
+{
+  analogWrite(M1_PWM,0);
+  analogWrite(M2_PWM,0);
+  analogWrite(M3_PWM,0);
+  analogWrite(M4_PWM,0);
+
+  analogWrite(GripVertical_PWM,0);
+  analogWrite(GripPiston_PWM,0);
+}
+
+// Initialize Encode Pins
+void INIT_EncoderPins()
+{
+  pinMode(2, INPUT_PULLUP);
+  pinMode(3, INPUT_PULLUP);  
+  attachInterrupt(0, ai0Back, RISING);
+  attachInterrupt(1, ai1Back, RISING);
+
+  
+  pinMode(18, INPUT_PULLUP); 
+  pinMode(19, INPUT_PULLUP);
+  attachInterrupt(5, ai0Right, RISING);
+  attachInterrupt(4, ai1Right, RISING);
+
+  pinMode(20, INPUT_PULLUP);
+  pinMode(21, INPUT_PULLUP);
+  attachInterrupt(3, ai0Left, RISING);
+  attachInterrupt(2, ai1Left, RISING);  // 20 
+}
+
+void CALCULATE_xy()
+{
+  botX = cm_per_tick * counterBack;
+
+  botY = cm_per_tick * ((counterLeft+counterRight) / 2.0);
+}
+
+void RESET_EncoderX()
+{
+  tempBack    = 0;counterBack = 0;
+  
+  botX = 0;
+}
+void RESET_EncoderY()
+{
+  tempLeft  = 0;counterLeft  = 0;
+  
+  tempRight = 0;counterRight = 0;
+
+  botY = 0;
+}
+void RESET_EncoderAll()
+{
+  RESET_EncoderX();
+  RESET_EncoderY();
+}
+
+
+//////////////////////////////////////////
+void ai0Back() {
+  if (digitalRead(3) == LOW) {
+    counterBack--;
+  } else {
+    counterBack++;
+  }
+}
+void ai1Back() {
+  if (digitalRead(2) == LOW) {
+    counterBack++;
+  } else {
+    counterBack--;
+  }
+}
+void ai0Right() {
+  if (digitalRead(19) == LOW) {
+    counterRight--;
+  } else {
+    counterRight++;
+  }
+}
+void ai1Right() {
+  if (digitalRead(18) == LOW) {
+    counterRight++;
+  } else {
+    counterRight--;
+  }
+}
+void ai0Left() {
+  if (digitalRead(21) == LOW) {
+    counterLeft++;
+  } else {
+    counterLeft--;
+  }
+}
+void ai1Left() {
+  if (digitalRead(20) == LOW) {
+    counterLeft--;
+  } else {
+    counterLeft++;
+  }
+}
+//////////////////////////////////////////
+
+////////////////////////////////////////////////////////////////////
+////////////////////////////////////////////////////////////////////
+
+
+////////////////////////////////////////////////////////////////////
+////////////////////// ATOMIC BASE DRIVE FUNTIONS  ////////////////////////
+
+//=================Individual Drive
+void DRIVE_M1(bool DIRECTION, int SPEED)
+{
+  digitalWrite(M1_DIR,DIRECTION);
+  analogWrite(M1_PWM,SPEED);
+}
+void DRIVE_M2(bool DIRECTION, int SPEED)
+{
+  digitalWrite(M2_DIR,DIRECTION);
+  analogWrite(M2_PWM,SPEED);
+}
+void DRIVE_M3(bool DIRECTION, int SPEED)
+{
+  digitalWrite(M3_DIR,DIRECTION);
+  analogWrite(M3_PWM,SPEED);
+}
+void DRIVE_M4(bool DIRECTION, int SPEED)
+{
+  digitalWrite(M4_DIR,DIRECTION);
+  analogWrite(M4_PWM,SPEED);
+}
+
+//====================Group Drive
+void DRIVE_Forward(int SPEED_2,int SPEED_4)
+{
+  DRIVE_M2(HIGH,SPEED_2);
+  DRIVE_M4(LOW,SPEED_4);
+}
+void DRIVE_Backward(int SPEED_2,int SPEED_4)
+{
+  DRIVE_M2(LOW,SPEED_2);
+  DRIVE_M4(HIGH,SPEED_4);
+}
+void DRIVE_Left(int SPEED_1,int SPEED_3)
+{
+  DRIVE_M1(HIGH,SPEED_1);
+  DRIVE_M3(LOW,SPEED_3);
+}
+void DRIVE_Right(int SPEED_1,int SPEED_3)
+{
+  DRIVE_M1(LOW,SPEED_1);
+  DRIVE_M3(HIGH,SPEED_3);
+}
+
+void DRIVE_StraightStop()
+{
+  analogWrite(M2_PWM,0);
+  analogWrite(M4_PWM,0);
+}
+void DRIVE_SideStop()
+{
+  analogWrite(M1_PWM,0);
+  analogWrite(M3_PWM,0);
+}
+void DRIVE_Stop()
+{
+  analogWrite(M1_PWM,0);
+  analogWrite(M2_PWM,0);
+  analogWrite(M3_PWM,0);
+  analogWrite(M4_PWM,0);
+}
+////////////////////////////////////////////////////////////////////
+////////////////////////////////////////////////////////////////////
+
+////////////////////////////////////////////////////////////////////
+////////////////// CUSTOM BASE DRIVE FUNCTIONS /////////////////////
+
+void DRIVE_FRBL()
+{
+  DRIVE_Left(100,100);
+  DRIVE_StraightStop();
+}
+
+void GRIPPER_Upwards(int SPEED)
+{
+  digitalWrite(GripVertical_DIR, LOW);
+  analogWrite(GripVertical_PWM, SPEED);
+}
+void GRIPPER_Downwards(int SPEED)
+{
+  digitalWrite(GripVertical_DIR, HIGH);
+  analogWrite(GripVertical_PWM, SPEED);
+}
+
+void Gripper_Close(int SPEED)
+{
+  digitalWrite(GripPiston_DIR,LOW);
+  analogWrite(GripPiston_PWM, SPEED);
+}
+void Gripper_Open(int SPEED)
+{
+  digitalWrite(GripPiston_DIR,HIGH);
+  analogWrite(GripPiston_PWM, SPEED);
+}
+
+////////////////////////////////////////////////////////////////////
+////////////////////////////////////////////////////////////////////
+
+void setup() 
+{
+  Serial.begin(9600);  
+
+  INIT_EncoderPins();
+  INIT_MotorPins();
+  INIT_MotorPins_Stop();
+  INIT_LimitSwitchPins();
+}
+
+void loop() 
+{
+//  DRIVE_FRBL();
+FIX_LimitSwitches();
+//  PRINT_LimitSwitches();
+  CALCULATE_xy();
+//  PRINT_Encoder_Cm();
+
+
+
+
+  
+}
+
+void FIX_LimitSwitches()
+{
+  FIX_LeftBack_LIMIT    =   !(digitalRead(LeftBack_LIMIT));
+  FIX_RightFront_LIMIT  =   !(digitalRead(RightFront_LIMIT));
+  FIX_RightBack_LIMIT   =   !(digitalRead(RightBack_LIMIT));
+}
+
+void PRINT_LimitSwitches()
+{
+  Serial.print("FrontLeft_LIMIT   (A0):");Serial.println(digitalRead(FrontLeft_LIMIT));
+  Serial.print("FrontRight_LIMIT  (A1):");Serial.println(digitalRead(FrontRight_LIMIT));
+  Serial.print("LeftFront_LIMIT   (A6):");Serial.println(digitalRead(LeftFront_LIMIT));
+  Serial.print("LeftBack_LIMIT    (A7):");Serial.println(FIX_LeftBack_LIMIT);
+  Serial.print("RightFront_LIMIT  (A2):");Serial.println(FIX_RightFront_LIMIT);
+  Serial.print("RightBack_LIMIT   (A3):");Serial.println(FIX_RightBack_LIMIT);
+  Serial.print("ClampBottom_LIMIT (A10):");Serial.println(digitalRead(ClampBottom_LIMIT));
+  Serial.print("ClampTop_LIMIT    (A8):");Serial.println(digitalRead(ClampTop_LIMIT));
+
+  Serial.println("\n\n=================================");
+}
+
+
+
+void PRINT_Encoder_Cm()
+{
+//    Serial.print("CounterLeft:");Serial.println(counterLeft);
+  Serial.print("X Direction (Sideways):");Serial.print(botX);
+  Serial.print("\t Y Direction (Forward) :");Serial.println(botY);
+
+  Serial.println("\n\n=================================");
+}
