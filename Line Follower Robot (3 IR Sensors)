@@ -1,0 +1,286 @@
+//Common initializations for constants and variables
+
+int readVal1, positionVal1, readVal2, positionVal2, readVal3, positionVal3;
+const byte analogPin1 = A1;
+const byte analogPin2 = A15;
+const byte analogPin3 = ;
+const byte junctionPulse = 20;
+const byte dir1 = 22;
+const byte dir2 = 24;
+const byte dir3 = 38;
+const byte dir4 = 40;
+const byte pwm1 = 4;
+const byte pwm2 = 5;
+const byte pwm3 = 44;
+const byte pwm4 = 46;
+int junctionCount; //Variable used to count the number of "T" or "+" junctions 
+const byte setPoint = 35; //Sets the halfway sensor value (Sensor Range is 0 to 70)
+
+void setup() {
+  Serial.begin(9600);
+
+  pinMode(analogPin1, INPUT);
+  pinMode(analogPin2, INPUT);
+  pinMode(junctionPulse, INPUT);
+  pinMode(dir1, OUTPUT);
+  pinMode(dir2, OUTPUT);
+  pinMode(pwm1, OUTPUT);
+  pinMode(pwm2, OUTPUT);
+  pinMode(dir3, OUTPUT);
+  pinMode(dir4, OUTPUT);
+  pinMode(pwm3, OUTPUT);
+  pinMode(pwm4, OUTPUT);
+  
+  analogWrite(pwm1, 0);
+  analogWrite(pwm2, 0);
+  analogWrite(pwm3, 0);
+  analogWrite(pwm4, 0);
+  delay(5000);
+
+  junctionCount = 0;
+
+}
+
+void loop() {
+
+//////////////////////////////////////////////Calculating Position Values
+  
+  readVAL1();
+  readVAL2();
+  readVAL3();
+
+///////////////////////////////Sensor 1 ->
+
+  if (positionVal1 <= 30) {
+    moveLeft();
+  }
+
+  else if (positionVal1 <= 45) {
+    moveForward();
+  }
+  
+  else if (positionVal1 <= 70) {
+    moveRight();
+  }
+  
+//////////////////////////////////////////////////////////Sensor 2 ->
+
+  else if ((positionVal2 <= 10) && (positionVal1 > 70)) {
+    LadjustLeft();
+  }
+
+  else if ((positionVal2 <= 52) && (positionVal1 > 70)) {
+    Lshift();
+  }
+  
+  else if ((positionVal2 <= 80) && (positionVal1 > 70)){
+    LadjustRight();
+  }
+
+////////////////////////////////////////////////////////////////////////////////////////Sensor 3 ->
+
+  else if ((positionVal3 <= 30) && (0 < positionVal2 < 70) && (0 < positionVal1 < 70)) {
+    RadjustLeft();
+    
+  }
+
+  else if ((positionVal3 <= 45) && (0 < positionVal2 < 70) && (0 < positionVal1 < 70)) {
+    Rshift();
+  }
+  
+  else if ((positionVal3 <= 70) && (0 < positionVal2 < 70) && (0 < positionVal1 < 70)) {
+    RadjustRight();
+  }
+
+////////////////////////////////////////////////////////////////////////////////////////
+
+ else if ((positionVal3 <= 30) && (positionVal2 <= 30)){
+    RadjustLeft();
+  }
+
+  else if ((positionVal3 <= 45) && (positionVal2 <= 45)){
+    Rshift
+  }
+  
+  else if ((positionVal3 <= 70) && (positionVal2 <= 70)) {
+   RadjustRight();
+  }
+
+  else {
+    wait();
+  }
+
+}
+
+void readVAL1(){
+  readVal1 = analogRead(analogPin1);
+  positionVal1 = ((float)readVal1 / 921) * 70;
+}
+
+void readVAL2(){
+  readVal2 = analogRead(analogPin2);
+  positionVal2 = ((float)readVal2 / 921) * 70;
+}
+
+void readVAL3(){
+  readVal3 = analogRead(analogPin3);
+  positionVal3 = ((float)readVal3 / 921) * 70;
+}
+
+void moveLeft() {
+  digitalWrite(dir1, 1);
+  digitalWrite(dir2, 0);
+  analogWrite(pwm1, 80);
+  analogWrite(pwm2, 0);
+  digitalWrite(dir3, 1);
+  digitalWrite(dir4, 0);
+  analogWrite(pwm3, 0);
+  analogWrite(pwm4, 0); 
+}
+
+void moveRight() {
+ digitalWrite(dir1, 1);
+  digitalWrite(dir2, 0);
+  analogWrite(pwm1, 0);
+  analogWrite(pwm2, 80);
+  digitalWrite(dir3, 1);
+  digitalWrite(dir4, 0);
+  analogWrite(pwm3, 0);
+  analogWrite(pwm4, 0); 
+}
+
+void moveForward() {
+  readVAL1();
+  int error1 = positionVal1 - setPoint;
+  float P = (Kp * error1);
+  float D = (error1 - lastError1);
+  int motorSpeed1 = ((Kp * error1) + (Kd * (error1 - lastError1)));
+  int lastError1 = error1;
+
+  rightFrontMotorSpeed = baseSpeed + motorSpeed1;
+  leftRearMotorSpeed = baseSpeed - motorSpeed1;
+
+  if (rightFrontMotorSpeed > maxSpeed) rightFrontMotorSpeed = maxSpeed;
+  if (leftRearMotorSpeed > maxSpeed) leftRearMotorSpeed = maxSpeed;
+
+  if (rightFrontMotorSpeed < 0) rightFrontMotorSpeed = 0;
+  if (leftRearMotorSpeed < 0) leftRearMotorSpeed = 0;
+
+  digitalWrite(dir1, 1);
+  digitalWrite(dir2, 0);
+  
+  analogWrite(pwm1, rightFrontMotorSpeed);
+  analogWrite(pwm2, leftRearMotorSpeed);
+  analogWrite(pwm3, 0);
+  analogWrite(pwm4, 0); 
+
+}
+
+void LadjustLeft() {
+  digitalWrite(dir1, 1);
+  digitalWrite(dir2, 0);
+  analogWrite(pwm1, 0);
+  analogWrite(pwm2, 0);
+  digitalWrite(dir3, 1);
+  digitalWrite(dir4, 0);
+  analogWrite(pwm3, 80);
+  analogWrite(pwm4, 0); 
+}
+
+void LadjustRight() {
+  digitalWrite(dir1, 1);
+  digitalWrite(dir2, 0);
+  analogWrite(pwm1, 0);
+  analogWrite(pwm2, 0);
+  digitalWrite(dir3, 1);
+  digitalWrite(dir4, 0);
+  analogWrite(pwm3, 0);
+  analogWrite(pwm4, 80); 
+}
+
+void Lshift() {
+  readVAL2();
+  int error2 = positionVal2 - setPoint;
+  if (positionVal2 < 10 && error2 < 0) {
+    positionVal2 += 20;
+  } else if (positionVal2 > 60 && error2 > 0) {
+    positionVal2 -= 20;
+  }
+  float P = (Kp * error2);
+  float D = (error2 - lastError2);
+  int motorSpeed2 = ((Kp * error2) + (Kd * (error1 - lastError2)));
+  int lastError2 = error2;
+
+  leftFrontMotorSpeed = baseSpeed + motorSpeed2;
+  rightRearMotorSpeed = baseSpeed - motorSpeed2;
+
+  if (leftFrontMotorSpeed > maxSpeed) leftFrontMotorSpeed = maxSpeed;
+  if (rightRearMotorSpeed > maxSpeed) rightRearMotorSpeed = maxSpeed;
+
+  if (leftFrontMotorSpeed < 0) leftFrontMotorSpeed = 0;
+  if (rightRearMotorSpeed < 0) rightRearMotorSpeed = 0;
+
+  digitalWrite(dir3, 1);
+  digitalWrite(dir4, 0);
+  
+  analogWrite(pwm1, 0);
+  analogWrite(pwm2, 0);
+  analogWrite(pwm3, leftFrontMotorSpeed);
+  analogWrite(pwm4, rightRearMotorSpeed); 
+}
+
+void RadjustLeft() {
+  digitalWrite(dir1, 1);
+  digitalWrite(dir2, 0);
+  analogWrite(pwm1, 0);
+  analogWrite(pwm2, 0);
+  digitalWrite(dir3, 0);
+  digitalWrite(dir4, 1);
+  analogWrite(pwm3, 0);
+  analogWrite(pwm4, 80); 
+}
+
+void RadjustRight() {
+  digitalWrite(dir1, 1);
+  digitalWrite(dir2, 0);
+  analogWrite(pwm1, 0);
+  analogWrite(pwm2, 0);
+  digitalWrite(dir3, 0);
+  digitalWrite(dir4, 1);
+  analogWrite(pwm3, 80);
+  analogWrite(pwm4, 0); 
+}
+
+void Rshift() {
+  readVAL3();
+  int error3 = positionVal3 - setPoint;
+  float P = (Kp * error3);
+  float D = (error3 - lastError3);
+  int motorSpeed3 = ((Kp * error3) + (Kd * (error3 - lastError3)));
+  int lastError3 = error3;
+
+  leftFrontMotorSpeed = baseSpeed + motorSpeed3;
+  rightRearMotorSpeed = baseSpeed - motorSpeed3;
+
+  if (leftFrontMotorSpeed > maxSpeed) leftFrontMotorSpeed = maxSpeed;
+  if (rightRearMotorSpeed > maxSpeed) rightRearMotorSpeed = maxSpeed;
+
+  if (leftFrontMotorSpeed < 0) leftFrontMotorSpeed = 0;
+  if (rightRearMotorSpeed < 0) rightRearMotorSpeed = 0;
+
+  digitalWrite(dir3, 0);
+  digitalWrite(dir4, 1);
+  
+  analogWrite(pwm1, 0);
+  analogWrite(pwm2, 0);
+  analogWrite(pwm3, leftFrontMotorSpeed);
+  analogWrite(pwm4, rightRearMotorSpeed); 
+}
+
+
+void wait() {
+  analogWrite(pwm1, 0);
+  analogWrite(pwm2, 0);
+  analogWrite(pwm3, 0);
+  analogWrite(pwm4, 0); 
+}
